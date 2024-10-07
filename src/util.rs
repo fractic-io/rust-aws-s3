@@ -1,12 +1,15 @@
 use std::{collections::HashMap, path::Path};
 
 use aws_sdk_s3::{
-    error::SdkError, operation::head_object::HeadObjectError, primitives::ByteStream,
+    error::SdkError,
+    operation::head_object::HeadObjectError,
+    primitives::{ByteStream, SdkBody},
 };
 use backend::S3BackendImpl;
 use fractic_generic_server_error::{cxt, GenericServerError};
+use serde::Serialize;
 
-use crate::errors::S3InvalidOperation;
+use crate::errors::{S3InvalidOperation, S3ItemParsingError, S3NotFound};
 
 use super::errors::S3ConnectionError;
 
@@ -19,6 +22,57 @@ pub struct S3Util<B: S3BackendImpl> {
     pub bucket: String,
 }
 impl<'a, C: S3BackendImpl> S3Util<C> {
+    pub async fn put_serializable<T: Serialize>(
+        &self,
+        key: String,
+        data: T,
+    ) -> Result<(), GenericServerError> {
+        cxt!("S3Util::put_serializable");
+        let serialized = serde_json::to_string(&data).map_err(|e| {
+            S3InvalidOperation::with_debug(CXT, "Failed to serialize object.", format!("{:?}", e))
+        })?;
+        let body = ByteStream::new(SdkBody::from(serialized));
+        self.backend
+            .put_object(self.bucket.clone(), key, body, None)
+            .await
+            .map_err(|e| {
+                S3ConnectionError::with_debug(
+                    CXT,
+                    "Failed to put serializable.",
+                    format!("{:?}", e),
+                )
+            })?;
+        Ok(())
+    }
+
+    pub async fn get_serializable<T: for<'de> serde::Deserialize<'de>>(
+        &self,
+        key: String,
+    ) -> Result<T, GenericServerError> {
+        cxt!("S3Util::get_serializable");
+        let output = self
+            .backend
+            .get_object(self.bucket.clone(), key)
+            .await
+            .map_err(|_| S3NotFound::default())?;
+        let bytes = output
+            .body
+            .collect()
+            .await
+            .map_err(|e| {
+                S3ConnectionError::with_debug(
+                    CXT,
+                    "Failed to read object body.",
+                    format!("{:?}", e),
+                )
+            })?
+            .into_bytes();
+        let deserialized = serde_json::from_slice(&bytes).map_err(|e| {
+            S3ItemParsingError::with_debug(CXT, "Failed to deserialize object.", format!("{:?}", e))
+        })?;
+        Ok(deserialized)
+    }
+
     pub async fn upload_file(
         &self,
         key: String,
