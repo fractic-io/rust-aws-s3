@@ -133,6 +133,17 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
         Ok(())
     }
 
+    pub async fn delete_object(&self, key: String) -> Result<(), GenericServerError> {
+        cxt!("S3Util::delete_object");
+        self.backend
+            .delete_object(self.bucket.clone(), key)
+            .await
+            .map_err(|e| {
+                S3ConnectionError::with_debug(CXT, "Failed to delete object.", format!("{:?}", e))
+            })?;
+        Ok(())
+    }
+
     pub async fn key_exists(&self, key: String) -> Result<bool, GenericServerError> {
         cxt!("S3Util::key_exists");
         match self.backend.head_object(self.bucket.clone(), key).await {
