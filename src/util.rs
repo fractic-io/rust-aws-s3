@@ -21,6 +21,24 @@ pub struct S3Util<B: S3BackendImpl> {
     pub backend: B,
     pub bucket: String,
 }
+
+pub struct S3KeyGenerator {}
+impl S3KeyGenerator {
+    pub fn date_partitioned_unique_key(
+        prefix: &str,
+        datetime: &chrono::DateTime<chrono::Utc>,
+    ) -> String {
+        format!(
+            "{prefix}/{year}/{month}/{day}/{epoch:011}-{uuid}",
+            year = datetime.format("%Y"),
+            month = datetime.format("%m"),
+            day = datetime.format("%d"),
+            epoch = datetime.timestamp(),
+            uuid = uuid::Uuid::new_v4(),
+        )
+    }
+}
+
 impl<'a, C: S3BackendImpl> S3Util<C> {
     pub async fn put_serializable<T: Serialize>(
         &self,
