@@ -6,7 +6,7 @@ use aws_sdk_s3::{
     primitives::{ByteStream, SdkBody},
 };
 use backend::S3BackendImpl;
-use fractic_generic_server_error::{cxt, GenericServerError};
+use fractic_server_error::{cxt, GenericServerError};
 use serde::Serialize;
 
 use crate::errors::{S3InvalidOperation, S3ItemParsingError, S3NotFound};

@@ -17,7 +17,7 @@ use aws_sdk_s3::{
     waiters::object_exists::{ObjectExistsFinalPoll, WaitUntilObjectExistsError},
 };
 use fractic_env_config::EnvVariables;
-use fractic_generic_server_error::GenericServerError;
+use fractic_server_error::GenericServerError;
 
 use crate::env::S3EnvConfig;
 
