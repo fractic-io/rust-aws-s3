@@ -17,7 +17,7 @@ use aws_sdk_s3::{
     waiters::object_exists::{ObjectExistsFinalPoll, WaitUntilObjectExistsError},
 };
 use fractic_env_config::EnvVariables;
-use fractic_server_error::GenericServerError;
+use fractic_server_error::ServerError;
 
 use crate::env::S3EnvConfig;
 
@@ -87,7 +87,7 @@ impl<'a> S3Util<aws_sdk_s3::Client> {
     pub async fn new(
         env: EnvVariables<S3EnvConfig>,
         bucket: impl Into<String>,
-    ) -> Result<Self, GenericServerError> {
+    ) -> Result<Self, ServerError> {
         let region_str = env.get(&S3EnvConfig::S3Region)?;
         let region = Region::new(region_str.clone());
         let shared_config = aws_config::defaults(BehaviorVersion::v2024_03_28())

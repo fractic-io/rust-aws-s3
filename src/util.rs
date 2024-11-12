@@ -6,12 +6,10 @@ use aws_sdk_s3::{
     primitives::{ByteStream, SdkBody},
 };
 use backend::S3BackendImpl;
-use fractic_server_error::{cxt, GenericServerError};
+use fractic_server_error::ServerError;
 use serde::Serialize;
 
-use crate::errors::{S3InvalidOperation, S3ItemParsingError, S3NotFound};
-
-use super::errors::S3ConnectionError;
+use crate::errors::{S3CalloutError, S3InvalidOperation, S3ItemParsingError, S3NotFound};
 
 pub mod backend;
 
@@ -44,50 +42,34 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
         &self,
         key: String,
         data: T,
-    ) -> Result<(), GenericServerError> {
-        cxt!("S3Util::put_serializable");
-        let serialized = serde_json::to_string(&data).map_err(|e| {
-            S3InvalidOperation::with_debug(CXT, "Failed to serialize object.", format!("{:?}", e))
-        })?;
+    ) -> Result<(), ServerError> {
+        let serialized = serde_json::to_string(&data)
+            .map_err(|e| S3InvalidOperation::with_debug("Failed to serialize object.", &e))?;
         let body = ByteStream::new(SdkBody::from(serialized));
         self.backend
             .put_object(self.bucket.clone(), key, body, None)
             .await
-            .map_err(|e| {
-                S3ConnectionError::with_debug(
-                    CXT,
-                    "Failed to put serializable.",
-                    format!("{:?}", e),
-                )
-            })?;
+            .map_err(|e| S3CalloutError::with_debug("Failed to put serializable.", &e))?;
         Ok(())
     }
 
     pub async fn get_serializable<T: for<'de> serde::Deserialize<'de>>(
         &self,
         key: String,
-    ) -> Result<T, GenericServerError> {
-        cxt!("S3Util::get_serializable");
+    ) -> Result<T, ServerError> {
         let output = self
             .backend
             .get_object(self.bucket.clone(), key)
             .await
-            .map_err(|_| S3NotFound::default())?;
+            .map_err(|_| S3NotFound::new())?;
         let bytes = output
             .body
             .collect()
             .await
-            .map_err(|e| {
-                S3ConnectionError::with_debug(
-                    CXT,
-                    "Failed to read object body.",
-                    format!("{:?}", e),
-                )
-            })?
+            .map_err(|e| S3CalloutError::with_debug("Failed to read object body.", &e))?
             .into_bytes();
-        let deserialized = serde_json::from_slice(&bytes).map_err(|e| {
-            S3ItemParsingError::with_debug(CXT, "Failed to deserialize object.", format!("{:?}", e))
-        })?;
+        let deserialized = serde_json::from_slice(&bytes)
+            .map_err(|e| S3ItemParsingError::with_debug("Failed to deserialize object.", &e))?;
         Ok(deserialized)
     }
 
@@ -96,19 +78,14 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
         key: String,
         filename: &str,
         metadata: Option<HashMap<String, String>>,
-    ) -> Result<(), GenericServerError> {
-        cxt!("S3Util::upload_file");
+    ) -> Result<(), ServerError> {
         let body = ByteStream::from_path(Path::new(filename))
             .await
-            .map_err(|e| {
-                S3InvalidOperation::with_debug(CXT, "Failed to open file.", format!("{:?}", e))
-            })?;
+            .map_err(|e| S3InvalidOperation::with_debug("Failed to open file.", &e))?;
         self.backend
             .put_object(self.bucket.clone(), key, body, metadata)
             .await
-            .map_err(|e| {
-                S3ConnectionError::with_debug(CXT, "Failed to upload file.", format!("{:?}", e))
-            })?;
+            .map_err(|e| S3CalloutError::with_debug("Failed to upload file.", &e))?;
         Ok(())
     }
 
@@ -116,51 +93,40 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
         &self,
         source_key: String,
         target_key: String,
-    ) -> Result<(), GenericServerError> {
-        cxt!("S3Util::move_object");
+    ) -> Result<(), ServerError> {
         self.backend
             .copy_object(self.bucket.clone(), source_key.clone(), target_key)
             .await
-            .map_err(|e| {
-                S3ConnectionError::with_debug(CXT, "Failed to copy object.", format!("{:?}", e))
-            })?;
+            .map_err(|e| S3CalloutError::with_debug("Failed to copy object.", &e))?;
         self.backend
             .delete_object(self.bucket.clone(), source_key)
             .await
-            .map_err(|e| {
-                S3ConnectionError::with_debug(CXT, "Failed to delete object.", format!("{:?}", e))
-            })?;
+            .map_err(|e| S3CalloutError::with_debug("Failed to delete object.", &e))?;
         Ok(())
     }
 
-    pub async fn delete_object(&self, key: String) -> Result<(), GenericServerError> {
-        cxt!("S3Util::delete_object");
+    pub async fn delete_object(&self, key: String) -> Result<(), ServerError> {
         self.backend
             .delete_object(self.bucket.clone(), key)
             .await
-            .map_err(|e| {
-                S3ConnectionError::with_debug(CXT, "Failed to delete object.", format!("{:?}", e))
-            })?;
+            .map_err(|e| S3CalloutError::with_debug("Failed to delete object.", &e))?;
         Ok(())
     }
 
-    pub async fn key_exists(&self, key: String) -> Result<bool, GenericServerError> {
-        cxt!("S3Util::key_exists");
+    pub async fn key_exists(&self, key: String) -> Result<bool, ServerError> {
         match self.backend.head_object(self.bucket.clone(), key).await {
             Ok(_) => Ok(true),
             Err(sdk_error) => match sdk_error {
                 SdkError::ServiceError(e) => match e.err() {
                     HeadObjectError::NotFound(_) => Ok(false),
-                    _ => Err(S3ConnectionError::with_debug(
-                        CXT,
+                    _ => Err(S3CalloutError::with_debug(
                         "Unexpected error running HeadObject operation.",
-                        e.err().to_string(),
+                        &e.err().to_string(),
                     )),
                 },
-                _ => Err(S3ConnectionError::with_debug(
-                    CXT,
+                _ => Err(S3CalloutError::with_debug(
                     "Failed to check key existance.",
-                    format!("{:?}", sdk_error),
+                    &sdk_error,
                 )),
             },
         }
@@ -170,40 +136,30 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
     pub async fn get_metadata_if_key_exists(
         &self,
         key: String,
-    ) -> Result<Option<HashMap<String, String>>, GenericServerError> {
-        cxt!("S3Util::key_exists");
+    ) -> Result<Option<HashMap<String, String>>, ServerError> {
         match self.backend.head_object(self.bucket.clone(), key).await {
             Ok(output) => Ok(Some(output.metadata.unwrap_or_default())),
             Err(sdk_error) => match sdk_error {
                 SdkError::ServiceError(e) => match e.err() {
                     HeadObjectError::NotFound(_) => Ok(None),
-                    _ => Err(S3ConnectionError::with_debug(
-                        CXT,
+                    _ => Err(S3CalloutError::with_debug(
                         "Unexpected error running HeadObject operation.",
-                        e.err().to_string(),
+                        &e.err().to_string(),
                     )),
                 },
-                _ => Err(S3ConnectionError::with_debug(
-                    CXT,
+                _ => Err(S3CalloutError::with_debug(
                     "Failed to check key existance.",
-                    format!("{:?}", sdk_error),
+                    &sdk_error,
                 )),
             },
         }
     }
 
-    pub async fn wait_until_key_exists(&self, key: String) -> Result<(), GenericServerError> {
-        cxt!("S3Util::wait_until_key_exists");
+    pub async fn wait_until_key_exists(&self, key: String) -> Result<(), ServerError> {
         self.backend
             .wait_until_object_exists(self.bucket.clone(), key, WAIT_FOR_KEY_TIMEOUT)
             .await
-            .map_err(|e| {
-                S3ConnectionError::with_debug(
-                    CXT,
-                    "Failed to wait for key existance.",
-                    format!("{:?}", e),
-                )
-            })?;
+            .map_err(|e| S3CalloutError::with_debug("Failed to wait for key existance.", &e))?;
         Ok(())
     }
 
@@ -211,31 +167,21 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
         &self,
         key: String,
         expires_in: std::time::Duration,
-    ) -> Result<String, GenericServerError> {
-        cxt!("S3Util::generate_presigned_url");
+    ) -> Result<String, ServerError> {
         let presigned_request = self
             .backend
             .generate_presigned_url(self.bucket.clone(), key, expires_in)
             .await
-            .map_err(|e| {
-                S3ConnectionError::with_debug(
-                    CXT,
-                    "Failed to generate presigned URL.",
-                    format!("{:?}", e),
-                )
-            })?;
+            .map_err(|e| S3CalloutError::with_debug("Failed to generate presigned URL.", &e))?;
         Ok(presigned_request.uri().into())
     }
 
-    pub async fn get_size(&self, key: String) -> Result<i64, GenericServerError> {
-        cxt!("S3Util::get_size");
+    pub async fn get_size(&self, key: String) -> Result<i64, ServerError> {
         let output = self
             .backend
             .head_object(self.bucket.clone(), key)
             .await
-            .map_err(|e| {
-                S3ConnectionError::with_debug(CXT, "Failed to get object size.", format!("{:?}", e))
-            })?;
+            .map_err(|e| S3CalloutError::with_debug("Failed to get object size.", &e))?;
         Ok(output.content_length.unwrap_or_default())
     }
 }
