@@ -44,12 +44,12 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
         data: T,
     ) -> Result<(), ServerError> {
         let serialized = serde_json::to_string(&data)
-            .map_err(|e| S3InvalidOperation::with_debug("Failed to serialize object.", &e))?;
+            .map_err(|e| S3InvalidOperation::with_debug("failed to serialize object", &e))?;
         let body = ByteStream::new(SdkBody::from(serialized));
         self.backend
             .put_object(self.bucket.clone(), key, body, None)
             .await
-            .map_err(|e| S3CalloutError::with_debug("Failed to put serializable.", &e))?;
+            .map_err(|e| S3CalloutError::with_debug("failed to put serializable", &e))?;
         Ok(())
     }
 
@@ -66,10 +66,10 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
             .body
             .collect()
             .await
-            .map_err(|e| S3CalloutError::with_debug("Failed to read object body.", &e))?
+            .map_err(|e| S3CalloutError::with_debug("failed to read object body", &e))?
             .into_bytes();
         let deserialized = serde_json::from_slice(&bytes)
-            .map_err(|e| S3ItemParsingError::with_debug("Failed to deserialize object.", &e))?;
+            .map_err(|e| S3ItemParsingError::with_debug("failed to deserialize object", &e))?;
         Ok(deserialized)
     }
 
@@ -81,11 +81,11 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
     ) -> Result<(), ServerError> {
         let body = ByteStream::from_path(Path::new(filename))
             .await
-            .map_err(|e| S3InvalidOperation::with_debug("Failed to open file.", &e))?;
+            .map_err(|e| S3InvalidOperation::with_debug("failed to open file", &e))?;
         self.backend
             .put_object(self.bucket.clone(), key, body, metadata)
             .await
-            .map_err(|e| S3CalloutError::with_debug("Failed to upload file.", &e))?;
+            .map_err(|e| S3CalloutError::with_debug("failed to upload file", &e))?;
         Ok(())
     }
 
@@ -97,11 +97,11 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
         self.backend
             .copy_object(self.bucket.clone(), source_key.clone(), target_key)
             .await
-            .map_err(|e| S3CalloutError::with_debug("Failed to copy object.", &e))?;
+            .map_err(|e| S3CalloutError::with_debug("failed to copy object", &e))?;
         self.backend
             .delete_object(self.bucket.clone(), source_key)
             .await
-            .map_err(|e| S3CalloutError::with_debug("Failed to delete object.", &e))?;
+            .map_err(|e| S3CalloutError::with_debug("failed to delete object", &e))?;
         Ok(())
     }
 
@@ -109,7 +109,7 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
         self.backend
             .delete_object(self.bucket.clone(), key)
             .await
-            .map_err(|e| S3CalloutError::with_debug("Failed to delete object.", &e))?;
+            .map_err(|e| S3CalloutError::with_debug("failed to delete object", &e))?;
         Ok(())
     }
 
@@ -120,12 +120,12 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
                 SdkError::ServiceError(e) => match e.err() {
                     HeadObjectError::NotFound(_) => Ok(false),
                     _ => Err(S3CalloutError::with_debug(
-                        "Unexpected error running HeadObject operation.",
+                        "unexpected error running HeadObject operation",
                         &e.err().to_string(),
                     )),
                 },
                 _ => Err(S3CalloutError::with_debug(
-                    "Failed to check key existance.",
+                    "failed to check key existance",
                     &sdk_error,
                 )),
             },
@@ -143,12 +143,12 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
                 SdkError::ServiceError(e) => match e.err() {
                     HeadObjectError::NotFound(_) => Ok(None),
                     _ => Err(S3CalloutError::with_debug(
-                        "Unexpected error running HeadObject operation.",
+                        "unexpected error running HeadObject operation",
                         &e.err().to_string(),
                     )),
                 },
                 _ => Err(S3CalloutError::with_debug(
-                    "Failed to check key existance.",
+                    "failed to check key existance",
                     &sdk_error,
                 )),
             },
@@ -159,7 +159,7 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
         self.backend
             .wait_until_object_exists(self.bucket.clone(), key, WAIT_FOR_KEY_TIMEOUT)
             .await
-            .map_err(|e| S3CalloutError::with_debug("Failed to wait for key existance.", &e))?;
+            .map_err(|e| S3CalloutError::with_debug("failed to wait for key existance", &e))?;
         Ok(())
     }
 
@@ -172,7 +172,7 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
             .backend
             .generate_presigned_url(self.bucket.clone(), key, expires_in)
             .await
-            .map_err(|e| S3CalloutError::with_debug("Failed to generate presigned URL.", &e))?;
+            .map_err(|e| S3CalloutError::with_debug("failed to generate presigned URL", &e))?;
         Ok(presigned_request.uri().into())
     }
 
@@ -181,7 +181,7 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
             .backend
             .head_object(self.bucket.clone(), key)
             .await
-            .map_err(|e| S3CalloutError::with_debug("Failed to get object size.", &e))?;
+            .map_err(|e| S3CalloutError::with_debug("failed to get object size", &e))?;
         Ok(output.content_length.unwrap_or_default())
     }
 }
