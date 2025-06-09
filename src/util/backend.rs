@@ -90,7 +90,7 @@ impl<'a> S3Util<aws_sdk_s3::Client> {
     ) -> Result<Self, ServerError> {
         let region_str = env.get(&S3EnvConfig::S3Region)?;
         let region = Region::new(region_str.clone());
-        let shared_config = aws_config::defaults(BehaviorVersion::v2024_03_28())
+        let shared_config = aws_config::defaults(BehaviorVersion::v2025_01_17())
             .region(region)
             .load()
             .await;
