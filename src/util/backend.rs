@@ -30,7 +30,7 @@ use super::S3Util;
 // aws_sdk_s3::Client, to minimize untestable code.
 // #[automock] TODO
 #[async_trait]
-pub trait S3BackendImpl {
+pub trait S3BackendImpl: Send + Sync + Clone + 'static {
     async fn put_object(
         &self,
         bucket: String,
