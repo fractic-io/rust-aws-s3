@@ -15,7 +15,7 @@ pub mod backend;
 
 const WAIT_FOR_KEY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
-pub struct S3Util<B: S3BackendImpl> {
+pub struct S3Util<B: S3BackendImpl = aws_sdk_s3::Client> {
     pub backend: B,
     pub bucket: String,
 }
@@ -183,5 +183,13 @@ impl<'a, C: S3BackendImpl> S3Util<C> {
             .await
             .map_err(|e| S3CalloutError::with_debug("failed to get object size", &e))?;
         Ok(output.content_length.unwrap_or_default())
+    }
+
+    /// List all keys in the bucket that start with `key_prefix`.
+    pub async fn list(&self, key_prefix: String) -> Result<Vec<String>, ServerError> {
+        self.backend
+            .list_keys(self.bucket.clone(), key_prefix)
+            .await
+            .map_err(|e| S3CalloutError::with_debug("failed to list keys", &e))
     }
 }

@@ -10,6 +10,7 @@ use aws_sdk_s3::{
         delete_object::{DeleteObjectError, DeleteObjectOutput},
         get_object::{GetObjectError, GetObjectOutput},
         head_object::{HeadObjectError, HeadObjectOutput},
+        list_objects_v2::ListObjectsV2Error,
         put_object::{PutObjectError, PutObjectOutput},
     },
     presigning::{PresignedRequest, PresigningConfig},
@@ -70,6 +71,12 @@ pub trait S3BackendImpl: Send + Sync + Clone + 'static {
         key: String,
         expires_in: Duration,
     ) -> Result<PresignedRequest, SdkError<GetObjectError>>;
+
+    async fn list_keys(
+        &self,
+        bucket: String,
+        prefix: String,
+    ) -> Result<Vec<String>, SdkError<ListObjectsV2Error>>;
 
     async fn wait_until_object_exists(
         &self,
@@ -182,5 +189,47 @@ impl S3BackendImpl for aws_sdk_s3::Client {
             .key(key)
             .wait(timeout)
             .await
+    }
+
+    async fn list_keys(
+        &self,
+        bucket: String,
+        prefix: String,
+    ) -> Result<Vec<String>, SdkError<ListObjectsV2Error>> {
+        let mut keys = Vec::new();
+        let mut continuation_token: Option<String> = None;
+
+        loop {
+            let mut request = self
+                .list_objects_v2()
+                .bucket(bucket.clone())
+                .prefix(prefix.clone());
+
+            if let Some(token) = &continuation_token {
+                request = request.continuation_token(token);
+            }
+
+            let response = request.send().await?;
+
+            let objects = response.contents();
+            keys.extend(
+                objects
+                    .iter()
+                    .filter_map(|obj| obj.key().map(|k| k.to_string())),
+            );
+
+            // Check if the response is truncated; if so, continue with the next token.
+            if response.is_truncated().unwrap_or(false) {
+                if let Some(next_token) = response.next_continuation_token().map(|s| s.to_string())
+                {
+                    continuation_token = Some(next_token);
+                    continue;
+                }
+            }
+
+            break;
+        }
+
+        Ok(keys)
     }
 }
