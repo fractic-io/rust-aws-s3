@@ -17,10 +17,9 @@ use aws_sdk_s3::{
     primitives::ByteStream,
     waiters::object_exists::{ObjectExistsFinalPoll, WaitUntilObjectExistsError},
 };
-use fractic_env_config::EnvVariables;
 use fractic_server_error::ServerError;
 
-use crate::env::S3EnvConfig;
+use crate::S3CtxView;
 
 use super::S3Util;
 
@@ -91,11 +90,8 @@ pub trait S3BackendImpl: Send + Sync + Clone + 'static {
 // --------------------------------------------------
 
 impl<'a> S3Util<aws_sdk_s3::Client> {
-    pub async fn new(
-        env: EnvVariables<S3EnvConfig>,
-        bucket: impl Into<String>,
-    ) -> Result<Self, ServerError> {
-        let region_str = env.get(&S3EnvConfig::S3Region)?;
+    pub async fn new(ctx: &impl S3CtxView, bucket: impl Into<String>) -> Result<Self, ServerError> {
+        let region_str = ctx.s_3_region();
         let region = Region::new(region_str.clone());
         let shared_config = aws_config::defaults(BehaviorVersion::v2025_01_17())
             .region(region)
