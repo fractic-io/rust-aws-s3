@@ -90,7 +90,7 @@ pub trait S3BackendImpl: Send + Sync + Clone + 'static {
 // --------------------------------------------------
 
 impl<'a> S3Util<aws_sdk_s3::Client> {
-    pub async fn new(ctx: &impl S3CtxView, bucket: impl Into<String>) -> Result<Self, ServerError> {
+    pub async fn new(ctx: &dyn S3CtxView, bucket: impl Into<String>) -> Result<Self, ServerError> {
         let region_str = ctx.s_3_region();
         let region = Region::new(region_str.clone());
         let shared_config = aws_config::defaults(BehaviorVersion::v2025_01_17())
