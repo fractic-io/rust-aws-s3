@@ -1,4 +1,4 @@
-use std::{collections::HashMap, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use aws_config::{BehaviorVersion, Region};
@@ -17,11 +17,9 @@ use aws_sdk_s3::{
     primitives::ByteStream,
     waiters::object_exists::{ObjectExistsFinalPoll, WaitUntilObjectExistsError},
 };
-use fractic_server_error::ServerError;
+use fractic_context::register_ctx_singleton;
 
 use crate::S3CtxView;
-
-use super::S3Util;
 
 // Underlying backend, which performs the actual AWS operations. Kept generic so
 // that it can be swapped with a mock backend for testing.
@@ -30,7 +28,7 @@ use super::S3Util;
 // aws_sdk_s3::Client, to minimize untestable code.
 // #[automock] TODO
 #[async_trait]
-pub trait S3BackendImpl: Send + Sync + Clone + 'static {
+pub trait S3Backend: Send + Sync {
     async fn put_object(
         &self,
         bucket: String,
@@ -89,24 +87,8 @@ pub trait S3BackendImpl: Send + Sync + Clone + 'static {
 // making actual calls to AWS.
 // --------------------------------------------------
 
-impl<'a> S3Util<aws_sdk_s3::Client> {
-    pub async fn new(ctx: &dyn S3CtxView, bucket: impl Into<String>) -> Result<Self, ServerError> {
-        let region_str = ctx.s_3_region();
-        let region = Region::new(region_str.clone());
-        let shared_config = aws_config::defaults(BehaviorVersion::v2025_01_17())
-            .region(region)
-            .load()
-            .await;
-        let client = aws_sdk_s3::Client::new(&shared_config);
-        Ok(Self {
-            backend: client,
-            bucket: bucket.into(),
-        })
-    }
-}
-
 #[async_trait]
-impl S3BackendImpl for aws_sdk_s3::Client {
+impl S3Backend for aws_sdk_s3::Client {
     async fn put_object(
         &self,
         bucket: String,
@@ -229,3 +211,19 @@ impl S3BackendImpl for aws_sdk_s3::Client {
         Ok(keys)
     }
 }
+
+// Register dependency, default to real AWS backend.
+// --------------------------------------------------
+
+register_ctx_singleton!(
+    dyn S3CtxView,
+    dyn S3Backend,
+    |ctx: Arc<dyn S3CtxView>| async move {
+        let region = Region::new(ctx.s_3_region().clone());
+        let shared_config = aws_config::defaults(BehaviorVersion::v2025_01_17())
+            .region(region)
+            .load()
+            .await;
+        Ok(aws_sdk_s3::Client::new(&shared_config))
+    }
+);

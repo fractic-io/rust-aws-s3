@@ -1,22 +1,25 @@
-use std::{collections::HashMap, path::Path};
+use std::{collections::HashMap, path::Path, sync::Arc};
 
 use aws_sdk_s3::{
     error::SdkError,
     operation::head_object::HeadObjectError,
     primitives::{ByteStream, SdkBody},
 };
-use backend::S3BackendImpl;
+use backend::S3Backend;
 use fractic_server_error::ServerError;
 use serde::Serialize;
 
-use crate::errors::{S3CalloutError, S3InvalidOperation, S3ItemParsingError, S3NotFound};
+use crate::{
+    errors::{S3CalloutError, S3InvalidOperation, S3ItemParsingError, S3NotFound},
+    S3CtxView,
+};
 
 pub mod backend;
 
 const WAIT_FOR_KEY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
 
-pub struct S3Util<B: S3BackendImpl = aws_sdk_s3::Client> {
-    pub backend: B,
+pub struct S3Util {
+    pub backend: Arc<dyn S3Backend>,
     pub bucket: String,
 }
 
@@ -37,7 +40,14 @@ impl S3KeyGenerator {
     }
 }
 
-impl<'a, C: S3BackendImpl> S3Util<C> {
+impl S3Util {
+    pub async fn new(ctx: &dyn S3CtxView, bucket: impl Into<String>) -> Result<Self, ServerError> {
+        Ok(Self {
+            backend: ctx.s_3_backend().await?,
+            bucket: bucket.into(),
+        })
+    }
+
     pub async fn put_serializable<T: Serialize>(
         &self,
         key: String,

@@ -6,6 +6,8 @@ define_ctx_view!(
         S3_REGION: String,
     },
     secrets {},
-    deps_overlay {},
+    deps_overlay {
+        dyn crate::util::backend::S3Backend,
+    },
     req_impl {}
 );
