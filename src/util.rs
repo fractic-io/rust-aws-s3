@@ -43,7 +43,7 @@ impl S3KeyGenerator {
 impl S3Util {
     pub async fn new(ctx: &dyn S3CtxView, bucket: impl Into<String>) -> Result<Self, ServerError> {
         Ok(Self {
-            backend: ctx.s_3_backend().await?,
+            backend: ctx.s3_backend().await?,
             bucket: bucket.into(),
         })
     }
