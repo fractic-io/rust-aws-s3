@@ -63,6 +63,19 @@ impl S3Util {
         Ok(())
     }
 
+    pub async fn put_string(&self, key: String, text: String) -> Result<(), ServerError> {
+        self.backend
+            .put_object(
+                self.bucket.clone(),
+                key,
+                ByteStream::new(SdkBody::from(text)),
+                None,
+            )
+            .await
+            .map_err(|e| S3CalloutError::with_debug("failed to put raw", &e))?;
+        Ok(())
+    }
+
     pub async fn get_serializable<T: for<'de> serde::Deserialize<'de>>(
         &self,
         key: String,
@@ -81,6 +94,23 @@ impl S3Util {
         let deserialized = serde_json::from_slice(&bytes)
             .map_err(|e| S3ItemParsingError::with_debug("failed to deserialize object", &e))?;
         Ok(deserialized)
+    }
+
+    pub async fn get_string(&self, key: String) -> Result<String, ServerError> {
+        let output = self
+            .backend
+            .get_object(self.bucket.clone(), key)
+            .await
+            .map_err(|_| S3NotFound::new())?;
+        let bytes = output
+            .body
+            .collect()
+            .await
+            .map_err(|e| S3CalloutError::with_debug("failed to read object body", &e))?
+            .into_bytes();
+        let text = String::from_utf8(bytes.to_vec())
+            .map_err(|e| S3ItemParsingError::with_debug("failed to parse object body", &e))?;
+        Ok(text)
     }
 
     pub async fn upload_file(
