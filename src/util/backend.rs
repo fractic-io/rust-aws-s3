@@ -34,6 +34,7 @@ pub trait S3Backend: Send + Sync {
         bucket: String,
         key: String,
         body: ByteStream,
+        content_type: String,
         metadata: Option<HashMap<String, String>>,
     ) -> Result<PutObjectOutput, SdkError<PutObjectError>>;
 
@@ -94,12 +95,14 @@ impl S3Backend for aws_sdk_s3::Client {
         bucket: String,
         key: String,
         body: ByteStream,
+        content_type: String,
         metadata: Option<HashMap<String, String>>,
     ) -> Result<PutObjectOutput, SdkError<PutObjectError>> {
         self.put_object()
             .bucket(bucket)
             .key(key)
             .body(body)
+            .content_type(content_type)
             .set_metadata(metadata)
             .send()
             .await

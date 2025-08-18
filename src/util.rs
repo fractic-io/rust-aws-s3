@@ -57,7 +57,13 @@ impl S3Util {
             .map_err(|e| S3InvalidOperation::with_debug("failed to serialize object", &e))?;
         let body = ByteStream::new(SdkBody::from(serialized));
         self.backend
-            .put_object(self.bucket.clone(), key, body, None)
+            .put_object(
+                self.bucket.clone(),
+                key,
+                body,
+                "application/json".to_string(),
+                None,
+            )
             .await
             .map_err(|e| S3CalloutError::with_debug("failed to put serializable", &e))?;
         Ok(())
@@ -69,6 +75,7 @@ impl S3Util {
                 self.bucket.clone(),
                 key,
                 ByteStream::new(SdkBody::from(text)),
+                "text/plain; charset=utf-8".to_string(),
                 None,
             )
             .await
@@ -119,11 +126,19 @@ impl S3Util {
         filename: &str,
         metadata: Option<HashMap<String, String>>,
     ) -> Result<(), ServerError> {
-        let body = ByteStream::from_path(Path::new(filename))
+        let path = Path::new(filename);
+        let content_type = mime_guess::from_path(path).first_or_octet_stream();
+        let body = ByteStream::from_path(path)
             .await
             .map_err(|e| S3InvalidOperation::with_debug("failed to open file", &e))?;
         self.backend
-            .put_object(self.bucket.clone(), key, body, metadata)
+            .put_object(
+                self.bucket.clone(),
+                key,
+                body,
+                content_type.to_string(),
+                metadata,
+            )
             .await
             .map_err(|e| S3CalloutError::with_debug("failed to upload file", &e))?;
         Ok(())
