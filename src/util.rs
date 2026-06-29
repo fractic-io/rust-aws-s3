@@ -120,6 +120,21 @@ impl S3Util {
         Ok(text)
     }
 
+    pub async fn get_bytes(&self, key: String) -> Result<Vec<u8>, ServerError> {
+        let output = self
+            .backend
+            .get_object(self.bucket.clone(), key)
+            .await
+            .map_err(|_| S3NotFound::new())?;
+        let bytes = output
+            .body
+            .collect()
+            .await
+            .map_err(|e| S3CalloutError::with_debug("failed to read object body", &e))?
+            .into_bytes();
+        Ok(bytes.to_vec())
+    }
+
     pub async fn upload_file(
         &self,
         key: String,
