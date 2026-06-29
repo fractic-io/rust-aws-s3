@@ -87,23 +87,16 @@ impl S3Util {
         &self,
         key: String,
     ) -> Result<T, ServerError> {
-        let output = self
-            .backend
-            .get_object(self.bucket.clone(), key)
-            .await
-            .map_err(|_| S3NotFound::new())?;
-        let bytes = output
-            .body
-            .collect()
-            .await
-            .map_err(|e| S3CalloutError::with_debug("failed to read object body", &e))?
-            .into_bytes();
-        let deserialized = serde_json::from_slice(&bytes)
-            .map_err(|e| S3ItemParsingError::with_debug("failed to deserialize object", &e))?;
-        Ok(deserialized)
+        serde_json::from_slice(&self.get_bytes(key).await?)
+            .map_err(|e| S3ItemParsingError::with_debug("failed to deserialize object", &e))
     }
 
     pub async fn get_string(&self, key: String) -> Result<String, ServerError> {
+        String::from_utf8(self.get_bytes(key).await?)
+            .map_err(|e| S3ItemParsingError::with_debug("failed to parse object body", &e))
+    }
+
+    pub async fn get_bytes(&self, key: String) -> Result<Vec<u8>, ServerError> {
         let output = self
             .backend
             .get_object(self.bucket.clone(), key)
@@ -115,9 +108,7 @@ impl S3Util {
             .await
             .map_err(|e| S3CalloutError::with_debug("failed to read object body", &e))?
             .into_bytes();
-        let text = String::from_utf8(bytes.to_vec())
-            .map_err(|e| S3ItemParsingError::with_debug("failed to parse object body", &e))?;
-        Ok(text)
+        Ok(bytes.to_vec())
     }
 
     pub async fn upload_file(
