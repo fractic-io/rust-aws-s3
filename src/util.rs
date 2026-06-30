@@ -7,9 +7,11 @@ use aws_sdk_s3::{
 };
 use backend::S3Backend;
 use fractic_server_error::ServerError;
+use futures_util::{stream, StreamExt as _, TryStreamExt as _};
 use serde::Serialize;
 
 use crate::{
+    constants::TARGET_CALLOUT_CONCURRENCY,
     errors::{S3CalloutError, S3InvalidOperation, S3ItemParsingError, S3NotFound},
     S3CtxView,
 };
@@ -156,6 +158,25 @@ impl S3Util {
             .delete_object(self.bucket.clone(), key)
             .await
             .map_err(|e| S3CalloutError::with_debug("failed to delete object", &e))?;
+        Ok(())
+    }
+
+    pub async fn delete_objects(&self, keys: Vec<String>) -> Result<(), ServerError> {
+        let _: Vec<()> = stream::iter(keys)
+            .map(|key| {
+                let backend = self.backend.clone();
+                let bucket = self.bucket.clone();
+                async move {
+                    backend
+                        .delete_object(bucket, key)
+                        .await
+                        .map(|_| ())
+                        .map_err(|e| S3CalloutError::with_debug("failed to delete object", &e))
+                }
+            })
+            .buffer_unordered(TARGET_CALLOUT_CONCURRENCY)
+            .try_collect()
+            .await?;
         Ok(())
     }
 
