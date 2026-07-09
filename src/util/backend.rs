@@ -223,7 +223,7 @@ register_ctx_singleton!(
     dyn S3Backend,
     |ctx: Arc<dyn S3CtxView>| async move {
         let region = Region::new(ctx.s3_region().clone());
-        let shared_config = aws_config::defaults(BehaviorVersion::v2026_01_12())
+        let shared_config = aws_config::defaults(BehaviorVersion::latest())
             .region(region)
             .load()
             .await;
