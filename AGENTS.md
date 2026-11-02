@@ -9,4 +9,3 @@ objects, uploads, presigned URLs), `S3CtxView`, typed errors, constants.
   `context.rs`, the public surface `util.rs` (`S3Util`) plus `pub use`s in
   `lib.rs`; `backend.rs` is the only place that calls the SDK. A new
   capability is a method on the util or an `ext/` module.
-- Commit / PR titles: `[util] …`, `[ext] …`.
